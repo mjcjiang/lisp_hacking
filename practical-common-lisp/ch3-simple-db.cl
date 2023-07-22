@@ -1,8 +1,8 @@
 (defvar *db* nil)
 
 ;;; cd operations
-(defun make-cd (title artist ratting ripped)
-    (list :title title :artist artist :ratting ratting :ripped ripped))
+(defun make-cd (title artist rating ripped)
+    (list :title title :artist artist :rating rating :ripped ripped))
 
 (defun prompt-read (prompt)
     (format *query-io* "~a: " prompt)
@@ -12,7 +12,7 @@
     (make-cd
         (prompt-read "Title")
         (prompt-read "Artist")
-        (or (parse-integer (prompt-read "Ratting") :junk-allowed t) 0)
+        (or (parse-integer (prompt-read "Rating") :junk-allowed t) 0)
         (y-or-n-p "Ripped [y/n]: ")))
 
 ;;; database operations
@@ -46,4 +46,42 @@
         #'(lambda (cd) (equal (getf cd :artist) artist))
         *db*))
 
-;;(defun where (&key title artist ratting (ripped nil ripped-p))
+"""
+(defun where (&key title artist ratting (ripped nil ripped-p))
+    #'(lambda (cd)
+          (and
+              (if title (equal (getf cd :title) title) t)
+              (if artist (equal (getf cd :artist) artist) t)
+              (if ratting (equal (getf cd :ratting) ratting) t)
+              (if ripped-p (equal (getf cd :ripped) ripped) t))))
+"""
+
+(defun select (where-fn)
+    (remove-if-not where-fn *db*))
+
+;;; data base update
+(defun update (select-fn &key title artist rating (ripped nil ripped-p))
+    (setf *db*
+        (mapcar
+            #'(lambda (row)
+                  (when (funcall select-fn row)
+                      (if title (setf (getf row :title) title))
+                      (if artist (setf (getf row :artist) artist))
+                      (if rating (setf (getf row :rating) rating))
+                      (if ripped-p (setf (getf row :ripped) ripped)))
+                  row) *db*)))
+
+;;;delete record(s) from db
+(defun delete-rows (select-fn)
+    (setf *db* (remove-if select-fn *db*)))
+
+;;; use macro remove duplications
+(defun make-comp-expr (field value)
+    `(equal (getf cd ,field) ,value))
+
+(defun make-comp-list (fields)
+    (loop while fields
+        collecting (make-comp-expr (pop fields) (pop fields))))
+
+(defmacro where (&rest clauses)
+    `#'(lambda (cd) (and ,@(make-comp-list clauses))))
